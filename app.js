@@ -185,7 +185,7 @@ class TennisTrainingApp {
                     endX: x,
                     endY: y,
                     id: Date.now(),
-                    sequence: this.getNextShotSequence()
+                    sequence: this.getNextSequenceNumber()
                 };
                 this.courtElements.push(element);
                 this.selectedShotPlayer = null;
@@ -211,7 +211,8 @@ class TennisTrainingApp {
                     startY: currentPos.y,
                     endX: x,
                     endY: y,
-                    id: Date.now()
+                    id: Date.now(),
+                    sequence: this.getNextSequenceNumber()
                 };
                 this.courtElements.push(element);
                 // Update current position
@@ -254,9 +255,12 @@ class TennisTrainingApp {
         return players.findIndex(p => p.id === playerId) + 1;
     }
     
-    getNextShotSequence() {
-        const shots = this.courtElements.filter(e => e.type === 'shot');
-        return shots.length + 1;
+    getNextSequenceNumber() {
+        const allSequencedElements = this.courtElements.filter(e => 
+            (e.type === 'shot' || e.type === 'movement') && e.sequence
+        );
+        return allSequencedElements.length > 0 ? 
+            Math.max(...allSequencedElements.map(e => e.sequence)) + 1 : 1;
     }
     
     initializePlayerPositions() {
@@ -275,40 +279,8 @@ class TennisTrainingApp {
     }
     
     drawStaticElements(ctx) {
-        // Draw players at their current positions (edit mode)
-        const players = this.courtElements.filter(e => e.type === 'player');
-        players.forEach(element => {
-            // Use current position if available
-            const currentPos = this.currentPlayerPositions.get(element.id) || 
-                              { x: element.x, y: element.y };
-            
-            // Draw player as yellow circle with black border
-            ctx.fillStyle = '#ffff00';
-            ctx.beginPath();
-            ctx.arc(currentPos.x, currentPos.y, 10, 0, 2 * Math.PI);
-            ctx.fill();
-            const isSelected = (this.selectedPlayer && this.selectedPlayer.id === element.id) || 
-                              (this.selectedShotPlayer && this.selectedShotPlayer.id === element.id);
-            ctx.strokeStyle = isSelected ? '#ff0000' : '#000';
-            ctx.lineWidth = isSelected ? 4 : 2;
-            ctx.stroke();
-            
-            if (isSelected) {
-                ctx.strokeStyle = '#ff0000';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([5, 5]);
-                ctx.beginPath();
-                ctx.arc(currentPos.x, currentPos.y, 18, 0, 2 * Math.PI);
-                ctx.stroke();
-                ctx.setLineDash([]);
-            }
-            
-            // Show player number
-            const playerNumber = this.getPlayerNumber(element.id);
-            ctx.fillStyle = '#000';
-            ctx.font = 'bold 12px Arial';
-            ctx.fillText('P' + playerNumber, currentPos.x - 15, currentPos.y - 15);
-        });
+        // First, draw all player positions in sequence
+        this.drawPlayerPositionSequence(ctx);
         
         // Draw shots with actual paths
         const shots = this.courtElements.filter(e => e.type === 'shot');
@@ -378,13 +350,118 @@ class TennisTrainingApp {
             );
             ctx.stroke();
             
-            // Show player ID
+            // Show movement info
             if (element.playerId) {
                 const playerNumber = this.getPlayerNumber(element.playerId);
                 ctx.fillStyle = '#0066cc';
-                ctx.font = '12px Arial';
-                ctx.fillText('P' + playerNumber, element.startX + 15, element.startY - 10);
+                ctx.font = '10px Arial';
+                const midX = (element.startX + element.endX) / 2;
+                const midY = (element.startY + element.endY) / 2;
+                ctx.fillText(`P${playerNumber}: Move (${element.sequence || 1})`, 
+                           midX + 10, midY - 5);
             }
+        });
+    }
+    
+    drawPlayerPositionSequence(ctx) {
+        const players = this.courtElements.filter(e => e.type === 'player');
+        const shots = this.courtElements.filter(e => e.type === 'shot');
+        const movements = this.courtElements.filter(e => e.type === 'movement');
+        
+        // Build a complete sequence of all player positions using unified sequence
+        const playerPositions = new Map();
+        const positionSequence = new Map(); // playerId -> [{x, y, sequence, type}]
+        
+        // Initialize starting positions
+        players.forEach(player => {
+            playerPositions.set(player.id, { x: player.x, y: player.y });
+            positionSequence.set(player.id, [
+                { x: player.x, y: player.y, sequence: 0, type: 'start' }
+            ]);
+        });
+        
+        // Process shots and movements in unified chronological order
+        const allEvents = [
+            ...shots.map(s => ({ ...s, eventType: 'shot' })),
+            ...movements.map(m => ({ ...m, eventType: 'movement' }))
+        ].sort((a, b) => (a.sequence || 1) - (b.sequence || 1));
+        
+        allEvents.forEach(event => {
+            if (event.eventType === 'shot') {
+                // Record shot position (where player is when hitting)
+                const positions = positionSequence.get(event.playerId) || [];
+                const currentPos = playerPositions.get(event.playerId);
+                positions.push({
+                    x: currentPos.x,
+                    y: currentPos.y,
+                    sequence: event.sequence,
+                    type: 'shot'
+                });
+                positionSequence.set(event.playerId, positions);
+            } else if (event.eventType === 'movement') {
+                // Record movement end position
+                const positions = positionSequence.get(event.playerId) || [];
+                positions.push({
+                    x: event.endX,
+                    y: event.endY,
+                    sequence: event.sequence,
+                    type: 'movement'
+                });
+                positionSequence.set(event.playerId, positions);
+                
+                // Update current position for next events
+                playerPositions.set(event.playerId, { x: event.endX, y: event.endY });
+            }
+        });
+        
+        // Draw all player positions with sequence numbers
+        players.forEach(player => {
+            const positions = positionSequence.get(player.id) || [];
+            const playerNumber = this.getPlayerNumber(player.id);
+            
+            positions.forEach((pos, index) => {
+                // Check if this player is selected
+                const isSelected = (this.selectedPlayer && this.selectedPlayer.id === player.id) || 
+                                  (this.selectedShotPlayer && this.selectedShotPlayer.id === player.id);
+                
+                // Draw position circle
+                if (pos.type === 'start') {
+                    ctx.fillStyle = '#ffff00'; // Yellow for starting position
+                } else if (pos.type === 'shot') {
+                    ctx.fillStyle = '#ff6666'; // Light red for shot positions
+                } else {
+                    ctx.fillStyle = '#66ccff'; // Light blue for movement positions
+                }
+                
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 8, 0, 2 * Math.PI);
+                ctx.fill();
+                
+                // Draw border
+                ctx.strokeStyle = isSelected ? '#ff0000' : '#000';
+                ctx.lineWidth = isSelected ? 3 : 1;
+                ctx.stroke();
+                
+                // Selection indicator
+                if (isSelected && index === positions.length - 1) {
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([5, 5]);
+                    ctx.beginPath();
+                    ctx.arc(pos.x, pos.y, 15, 0, 2 * Math.PI);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+                
+                // Draw player number and sequence
+                ctx.fillStyle = '#000';
+                ctx.font = 'bold 10px Arial';
+                if (pos.sequence === 0) {
+                    ctx.fillText(`P${playerNumber}`, pos.x - 12, pos.y - 12);
+                } else {
+                    ctx.fillText(`P${playerNumber}-${pos.sequence}`, pos.x - 15, pos.y - 12);
+                }
+            });
         });
     }
     
@@ -1217,9 +1294,22 @@ class TennisTrainingApp {
     }
     
     createRallySequence() {
-        const shots = this.courtElements.filter(e => e.type === 'shot').sort((a, b) => (a.sequence || 1) - (b.sequence || 1));
+        const shots = this.courtElements.filter(e => e.type === 'shot');
         const movements = this.courtElements.filter(e => e.type === 'movement');
         const players = this.courtElements.filter(e => e.type === 'player');
+        
+        // Create unified sequence of all events sorted by sequence number
+        const allEvents = [
+            ...shots.map(s => ({ ...s, eventType: 'shot' })),
+            ...movements.map(m => ({ ...m, eventType: 'movement' }))
+        ].sort((a, b) => (a.sequence || 1) - (b.sequence || 1));
+        
+        console.log('Processing events in sequence:', allEvents.map(e => `${e.eventType} ${e.sequence}`));
+        
+        // Constants for realistic speeds
+        const BALL_SPEED = 200; // pixels per second
+        const PLAYER_SPEED = 150; // pixels per second
+        const SHOT_DELAY = 300; // ms delay after ball arrives before hitting
         
         const sequence = [];
         let currentTime = 0;
@@ -1230,69 +1320,67 @@ class TennisTrainingApp {
             playerPositions.set(player.id, { x: player.x, y: player.y });
         });
         
-        shots.forEach((shot, index) => {
-            const hittingPlayer = shot.playerId;
-            const ballLandingX = shot.endX;
-            const ballLandingY = shot.endY;
-            
-            // Add shot action
-            sequence.push({
-                type: 'shot',
-                startTime: currentTime,
-                duration: 1500,
-                data: {
-                    ...shot,
-                    playerPosition: playerPositions.get(hittingPlayer)
-                },
-                action: 'travel'
-            });
-            
-            // Player movement starts 0.5s after hitting
-            const movementStartTime = currentTime + 500;
-            
-            // Find explicit movements for the hitting player
-            const playerMovements = movements.filter(m => m.playerId === hittingPlayer);
-            if (playerMovements.length > 0) {
-                playerMovements.forEach(movement => {
-                    sequence.push({
-                        type: 'movement',
-                        startTime: movementStartTime,
-                        duration: 1000,
-                        data: movement,
-                        action: 'move'
-                    });
-                    // Update player position
-                    playerPositions.set(hittingPlayer, { x: movement.endX, y: movement.endY });
+        // Process ALL events in true chronological order
+        allEvents.forEach((event, index) => {
+            if (event.eventType === 'shot') {
+                const hittingPlayer = event.playerId;
+                const hittingPlayerPos = playerPositions.get(hittingPlayer);
+                const ballLandingX = event.endX;
+                const ballLandingY = event.endY;
+                
+                // Calculate ball travel distance and duration
+                const ballDistance = Math.sqrt(
+                    Math.pow(ballLandingX - hittingPlayerPos.x, 2) + 
+                    Math.pow(ballLandingY - hittingPlayerPos.y, 2)
+                );
+                const ballTravelDuration = (ballDistance / BALL_SPEED) * 1000;
+                
+                sequence.push({
+                    type: 'shot',
+                    startTime: currentTime,
+                    duration: ballTravelDuration,
+                    data: {
+                        ...event,
+                        playerPosition: hittingPlayerPos
+                    },
+                    action: 'travel'
                 });
+                
+                console.log(`Shot ${event.sequence}: P${this.getPlayerNumber(hittingPlayer)} hits at ${currentTime}ms`);
+                currentTime += ballTravelDuration + SHOT_DELAY;
+                
+            } else if (event.eventType === 'movement') {
+                const movingPlayer = event.playerId;
+                const currentPos = playerPositions.get(movingPlayer);
+                
+                // Calculate movement distance and duration
+                const moveDistance = Math.sqrt(
+                    Math.pow(event.endX - currentPos.x, 2) + 
+                    Math.pow(event.endY - currentPos.y, 2)
+                );
+                const moveDuration = (moveDistance / PLAYER_SPEED) * 1000;
+                
+                sequence.push({
+                    type: 'movement',
+                    startTime: currentTime,
+                    duration: moveDuration,
+                    data: {
+                        ...event,
+                        startX: currentPos.x,
+                        startY: currentPos.y
+                    },
+                    action: 'move'
+                });
+                
+                // Update player position for future events
+                playerPositions.set(movingPlayer, { x: event.endX, y: event.endY });
+                
+                console.log(`Movement ${event.sequence}: P${this.getPlayerNumber(movingPlayer)} moves at ${currentTime}ms`);
+                currentTime += moveDuration;
             }
-            
-            // Find receiving player and move them to ball landing point
-            const nextShot = shots[index + 1];
-            if (nextShot) {
-                const receivingPlayer = nextShot.playerId;
-                if (receivingPlayer !== hittingPlayer) {
-                    // Auto-move receiving player to ball landing area
-                    sequence.push({
-                        type: 'auto_movement',
-                        startTime: currentTime + 200, // Start moving to receive position early
-                        duration: 1300,
-                        data: {
-                            playerId: receivingPlayer,
-                            startX: playerPositions.get(receivingPlayer).x,
-                            startY: playerPositions.get(receivingPlayer).y,
-                            endX: ballLandingX,
-                            endY: ballLandingY
-                        },
-                        action: 'receive'
-                    });
-                    // Update receiving player position
-                    playerPositions.set(receivingPlayer, { x: ballLandingX, y: ballLandingY });
-                }
-            }
-            
-            currentTime += 1500;
         });
         
+        console.log('Final animation sequence:', sequence.map(s => `${s.type} at ${s.startTime}ms`));
         return sequence;
     }
     
