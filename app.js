@@ -1385,6 +1385,11 @@ class TennisTrainingApp {
     }
     
     drawRallyBall(ctx, elapsed, rally) {
+        let ballX = null;
+        let ballY = null;
+        let activeBall = false;
+        
+        // First check if we're currently in a shot
         for (let i = 0; i < rally.length; i++) {
             const event = rally[i];
             
@@ -1400,24 +1405,67 @@ class TennisTrainingApp {
                 const startY = event.data.playerPosition ? event.data.playerPosition.y : shot.startY;
                 
                 // Draw ball traveling along shot path
-                const ballX = startX + (shot.endX - startX) * progress;
-                const ballY = startY + (shot.endY - startY) * progress;
-                
-                // Tennis ball (yellow with curve lines)
-                ctx.fillStyle = '#ffff80';
-                ctx.beginPath();
-                ctx.arc(ballX, ballY, 8, 0, 2 * Math.PI);
-                ctx.fill();
-                
-                ctx.strokeStyle = '#fff';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.arc(ballX, ballY, 6, 0, Math.PI);
-                ctx.stroke();
-                
+                ballX = startX + (shot.endX - startX) * progress;
+                ballY = startY + (shot.endY - startY) * progress;
+                activeBall = true;
                 break; // Only show one ball at a time
             }
         }
+        
+        // If no active shot, find the last completed shot's end position
+        if (!activeBall) {
+            let lastCompletedShot = null;
+            for (let i = 0; i < rally.length; i++) {
+                const event = rally[i];
+                if (event.type === 'shot' && elapsed >= event.startTime + event.duration) {
+                    lastCompletedShot = event;
+                }
+            }
+            
+            if (lastCompletedShot) {
+                const shot = lastCompletedShot.data;
+                ballX = shot.endX;
+                ballY = shot.endY;
+            }
+        }
+        
+        // Draw the ball if we have a position
+        if (ballX !== null && ballY !== null) {
+            this.drawTennisBall(ctx, ballX, ballY);
+        }
+    }
+    
+    drawTennisBall(ctx, x, y) {
+        // Save context
+        ctx.save();
+        
+        // Tennis ball emoji approach - draw a yellow circle with tennis ball pattern
+        ctx.fillStyle = '#e6ff00'; // Bright tennis ball yellow
+        ctx.beginPath();
+        ctx.arc(x, y, 10, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Add tennis ball seam lines
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        // Curved seam line 1
+        ctx.arc(x, y, 7, -Math.PI/4, 3*Math.PI/4, false);
+        ctx.stroke();
+        
+        ctx.beginPath();
+        // Curved seam line 2 (opposite curve)
+        ctx.arc(x, y, 7, 3*Math.PI/4, 7*Math.PI/4, false);
+        ctx.stroke();
+        
+        // Add subtle shadow/depth
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.beginPath();
+        ctx.arc(x + 1, y + 1, 10, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        // Restore context
+        ctx.restore();
     }
     
     drawPlayersAtTime(ctx, elapsed, rally) {
