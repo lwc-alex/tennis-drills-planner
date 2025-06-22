@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tennis Training Planner</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Tennis Training Planner</h1>
+            <nav>
+                <button id="nav-drills" class="nav-btn active">Drills</button>
+                <button id="nav-routines" class="nav-btn">Routines</button>
+                <button id="nav-player" class="nav-btn">Player</button>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Drills Section -->
+            <section id="drills-section" class="section active">
+                <div class="section-header">
+                    <h2>Drill Library</h2>
+                    <button id="create-drill-btn" class="primary-btn">Create New Drill</button>
+                </div>
+                <div id="drills-list" class="drills-grid"></div>
+            </section>
+
+            <!-- Routines Section -->
+            <section id="routines-section" class="section">
+                <div class="section-header">
+                    <h2>Training Routines</h2>
+                    <button id="create-routine-btn" class="primary-btn">Create New Routine</button>
+                </div>
+                <div id="routines-list" class="routines-grid"></div>
+            </section>
+
+            <!-- Player Section -->
+            <section id="player-section" class="section">
+                <div class="section-header">
+                    <h2>Current Session</h2>
+                </div>
+                <div id="player-container">
+                    <div id="session-controls">
+                        <select id="routine-select">
+                            <option value="">Select a routine</option>
+                        </select>
+                        <button id="start-session-btn" class="primary-btn">Start Session</button>
+                    </div>
+                    <div id="session-display" class="hidden">
+                        <div id="drill-info">
+                            <h3 id="current-drill-name"></h3>
+                            <p id="drill-description"></p>
+                        </div>
+                        <div id="court-container">
+                            <canvas id="court-canvas" width="300" height="600"></canvas>
+                            <div id="session-animation-controls" class="animation-controls">
+                                <button type="button" id="session-play-animation-btn" class="control-btn">▶️ Animation</button>
+                                <button type="button" id="session-pause-animation-btn" class="control-btn hidden">⏸️</button>
+                                <button type="button" id="session-reset-animation-btn" class="control-btn hidden">⏮️</button>
+                            </div>
+                        </div>
+                        <div id="timer-container">
+                            <div id="timer-display">00:00</div>
+                            <div id="session-controls-active">
+                                <button id="play-pause-btn" class="control-btn">▶️</button>
+                                <button id="prev-drill-btn" class="control-btn">⏮️</button>
+                                <button id="next-drill-btn" class="control-btn">⏭️</button>
+                                <button id="stop-session-btn" class="control-btn">⏹️</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Drill Creation Modal -->
+        <div id="drill-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Create New Drill</h3>
+                    <button id="close-drill-modal" class="close-btn">&times;</button>
+                </div>
+                <form id="drill-form">
+                    <div class="form-group">
+                        <label for="drill-name">Drill Name:</label>
+                        <input type="text" id="drill-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="drill-description">Description:</label>
+                        <textarea id="drill-description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="drill-duration">Duration (minutes):</label>
+                        <input type="number" id="drill-duration" value="2" min="1" max="30" step="0.5">
+                    </div>
+                    <div class="form-group">
+                        <label>Court Setup:</label>
+                        <div id="drill-court-container">
+                            <canvas id="drill-court-canvas" width="300" height="600"></canvas>
+                        </div>
+                        <div id="drill-tools">
+                            <button type="button" id="add-player-btn" class="tool-btn">Add Player</button>
+                            <button type="button" id="add-shot-btn" class="tool-btn">Add Shot</button>
+                            <button type="button" id="add-movement-btn" class="tool-btn">Add Movement</button>
+                            <button type="button" id="clear-court-btn" class="tool-btn">Clear Court</button>
+                            <button type="button" id="preview-animation-btn" class="tool-btn">Preview Animation</button>
+                        </div>
+                        <div id="shot-type-selector" class="hidden">
+                            <label for="shot-type">Shot Type:</label>
+                            <select id="shot-type">
+                                <option value="forehand">Forehand</option>
+                                <option value="backhand">Backhand</option>
+                                <option value="serve">Serve</option>
+                                <option value="volley">Volley</option>
+                                <option value="approach">Approach Shot</option>
+                                <option value="lob">Lob</option>
+                                <option value="drop">Drop Shot</option>
+                                <option value="smash">Smash</option>
+                            </select>
+                        </div>
+                        <div id="animation-controls" class="hidden">
+                            <button type="button" id="play-animation-btn" class="control-btn">▶️</button>
+                            <button type="button" id="pause-animation-btn" class="control-btn">⏸️</button>
+                            <button type="button" id="reset-animation-btn" class="control-btn">⏮️</button>
+                            <div id="animation-timeline">
+                                <input type="range" id="timeline-slider" min="0" max="100" value="0">
+                                <span id="timeline-display">0.0s / 0.0s</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" id="cancel-drill" class="secondary-btn">Cancel</button>
+                        <button type="submit" class="primary-btn">Save Drill</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Drill Preview Modal -->
+        <div id="drill-preview-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3 id="preview-drill-title">Drill Preview</h3>
+                    <button id="close-preview-modal" class="close-btn">&times;</button>
+                </div>
+                <div class="form-group">
+                    <div id="preview-court-container">
+                        <canvas id="preview-court-canvas" width="300" height="600"></canvas>
+                    </div>
+                    <div id="preview-animation-controls">
+                        <button type="button" id="preview-play-btn" class="control-btn">▶️</button>
+                        <button type="button" id="preview-pause-btn" class="control-btn">⏸️</button>
+                        <button type="button" id="preview-reset-btn" class="control-btn">⏮️</button>
+                        <div id="preview-timeline">
+                            <input type="range" id="preview-timeline-slider" min="0" max="100" value="0">
+                            <span id="preview-timeline-display">0.0s / 0.0s</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Routine Creation Modal -->
+        <div id="routine-modal" class="modal hidden">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Create New Routine</h3>
+                    <button id="close-routine-modal" class="close-btn">&times;</button>
+                </div>
+                <form id="routine-form">
+                    <div class="form-group">
+                        <label for="routine-name">Routine Name:</label>
+                        <input type="text" id="routine-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="routine-description">Description:</label>
+                        <textarea id="routine-description" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Select Drills:</label>
+                        <div id="routine-drills-selection"></div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" id="cancel-routine" class="secondary-btn">Cancel</button>
+                        <button type="submit" class="primary-btn">Save Routine</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
