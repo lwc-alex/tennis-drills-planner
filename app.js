@@ -31,12 +31,36 @@ class TennisTrainingApp {
     }
 
     async init() {
+        this.checkMinimumHeight();
         this.bindEvents();
         await this.loadData();
         this.renderDrills();
         this.renderRoutines();
         this.updateRoutineSelect();
         this.showSection('drills');
+        
+        // Set up height monitoring
+        window.addEventListener('resize', () => this.checkMinimumHeight());
+    }
+
+    checkMinimumHeight() {
+        const minHeight = 700;
+        const currentHeight = window.innerHeight;
+        const heightWarning = document.getElementById('height-warning');
+        const app = document.getElementById('app');
+        const currentHeightSpan = document.getElementById('current-height');
+        
+        if (currentHeightSpan) {
+            currentHeightSpan.textContent = currentHeight;
+        }
+        
+        if (currentHeight < minHeight) {
+            heightWarning.style.display = 'flex';
+            app.style.display = 'none';
+        } else {
+            heightWarning.style.display = 'none';
+            app.style.display = 'flex';
+        }
     }
 
     bindEvents() {
@@ -215,7 +239,10 @@ class TennisTrainingApp {
     getPlayerAt(x, y) {
         return this.courtElements.find(element => {
             if (element.type === 'player') {
-                const distance = Math.sqrt(Math.pow(element.x - x, 2) + Math.pow(element.y - y, 2));
+                // Use current position if available, otherwise use original position
+                const currentPos = this.currentPlayerPositions.get(element.id) || 
+                                  { x: element.x, y: element.y };
+                const distance = Math.sqrt(Math.pow(currentPos.x - x, 2) + Math.pow(currentPos.y - y, 2));
                 return distance <= 15;
             }
             return false;
@@ -1309,57 +1336,60 @@ class TennisTrainingApp {
         const players = this.courtElements.filter(e => e.type === 'player');
         const playerCurrentPositions = new Map();
         
-        // Find final positions from the complete sequence first
-        const finalPositions = new Map();
+        // Build a complete timeline of player positions
+        const playerTimeline = new Map();
         players.forEach(player => {
-            finalPositions.set(player.id, { x: player.x, y: player.y });
+            playerTimeline.set(player.id, [
+                { time: 0, x: player.x, y: player.y }
+            ]);
         });
         
-        // Get final positions from all completed movements
+        // Add all movement events to timeline
         rally.forEach(event => {
             if (event.type === 'movement' || event.type === 'auto_movement') {
                 const playerId = event.data.playerId;
-                finalPositions.set(playerId, {
+                const timeline = playerTimeline.get(playerId) || [];
+                
+                // Add end position to timeline
+                timeline.push({
+                    time: event.startTime + event.duration,
                     x: event.data.endX,
                     y: event.data.endY
                 });
+                
+                playerTimeline.set(playerId, timeline.sort((a, b) => a.time - b.time));
             }
         });
         
-        // For looping: if elapsed is near 0, start from final positions
-        if (elapsed < 100) {
-            finalPositions.forEach((pos, playerId) => {
-                playerCurrentPositions.set(playerId, pos);
-            });
-        } else {
-            // Initialize with original positions for mid-sequence calculations
-            players.forEach(player => {
-                playerCurrentPositions.set(player.id, { x: player.x, y: player.y });
-            });
-        }
-        
-        // Calculate current positions based on rally events
-        rally.forEach(event => {
-            if ((event.type === 'movement' || event.type === 'auto_movement') && 
-                elapsed >= event.startTime) {
-                
-                const playerId = event.data.playerId;
-                
-                if (elapsed >= event.startTime + event.duration) {
-                    // Movement completed
-                    playerCurrentPositions.set(playerId, {
-                        x: event.data.endX,
-                        y: event.data.endY
-                    });
-                } else {
-                    // Movement in progress
-                    const progress = (elapsed - event.startTime) / event.duration;
-                    playerCurrentPositions.set(playerId, {
-                        x: event.data.startX + (event.data.endX - event.data.startX) * progress,
-                        y: event.data.startY + (event.data.endY - event.data.startY) * progress
-                    });
+        // Calculate current positions for each player
+        players.forEach(player => {
+            const timeline = playerTimeline.get(player.id);
+            let currentPos = { x: player.x, y: player.y };
+            
+            // Find the latest completed position
+            for (let i = timeline.length - 1; i >= 0; i--) {
+                if (elapsed >= timeline[i].time) {
+                    currentPos = { x: timeline[i].x, y: timeline[i].y };
+                    break;
                 }
             }
+            
+            // Check for any movement in progress
+            rally.forEach(event => {
+                if ((event.type === 'movement' || event.type === 'auto_movement') && 
+                    event.data.playerId === player.id &&
+                    elapsed >= event.startTime && elapsed < event.startTime + event.duration) {
+                    
+                    // Movement in progress - interpolate
+                    const progress = (elapsed - event.startTime) / event.duration;
+                    currentPos = {
+                        x: event.data.startX + (event.data.endX - event.data.startX) * progress,
+                        y: event.data.startY + (event.data.endY - event.data.startY) * progress
+                    };
+                }
+            });
+            
+            playerCurrentPositions.set(player.id, currentPos);
         });
         
         // Draw each player at their current position (only once)
@@ -1686,20 +1716,20 @@ class TennisTrainingApp {
         // Set editing mode
         this.editingDrill = drill;
         
-        // Populate form with existing data
+        // Show modal first (this will clear elements)
+        this.showDrillModal();
+        
+        // Then populate form with existing data
         document.getElementById('drill-name').value = drill.name;
         document.getElementById('drill-description').value = drill.description || '';
         document.getElementById('drill-duration').value = drill.duration;
         
-        // Load court elements
+        // Load court elements AFTER showing modal
         this.courtElements = drill.courtElements || [];
         this.initializePlayerPositions();
         
         // Update modal title
         document.querySelector('#drill-modal .modal-header h3').textContent = 'Edit Drill';
-        
-        // Show modal
-        this.showDrillModal();
         
         // Draw court with existing elements
         this.drawCourt('drill-court-canvas');
