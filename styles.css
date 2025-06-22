@@ -169,7 +169,7 @@ main {
     gap: 1.5rem;
     overflow-y: auto;
     flex: 1;
-    padding: 0.5rem 0;
+    padding: 0.5rem 0 7rem 0;
 }
 
 .drill-card, .routine-card {
@@ -774,6 +774,7 @@ main {
     .drills-grid, .routines-grid {
         grid-template-columns: 1fr;
         gap: 1rem;
+        padding: 0.5rem 0 max(7rem, env(safe-area-inset-bottom, 7rem)) 0;
     }
     
     .modal-content {
