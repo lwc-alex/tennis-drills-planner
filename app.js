@@ -88,6 +88,7 @@ class TennisTrainingApp {
         document.getElementById('add-shot-btn').addEventListener('click', () => this.setTool('shot'));
         document.getElementById('add-movement-btn').addEventListener('click', () => this.setTool('movement'));
         document.getElementById('clear-court-btn').addEventListener('click', () => this.clearCourt());
+        document.getElementById('flip-horizontal-btn').addEventListener('click', () => this.flipHorizontal());
         document.getElementById('preview-animation-btn').addEventListener('click', () => this.toggleAnimationPreview());
         document.getElementById('undo-btn').addEventListener('click', () => this.undo());
         document.getElementById('redo-btn').addEventListener('click', () => this.redo());
@@ -118,6 +119,9 @@ class TennisTrainingApp {
                     } else if ((e.key === 'y') || (e.key === 'z' && e.shiftKey)) {
                         e.preventDefault();
                         this.redo();
+                    } else if (e.key === 'f') {
+                        e.preventDefault();
+                        this.flipHorizontal();
                     }
                 }
             }
@@ -187,8 +191,6 @@ class TennisTrainingApp {
             this.courtElements.push(element);
             // Track current position
             this.currentPlayerPositions.set(element.id, { x: x, y: y });
-            console.log('Added player element:', element);
-            console.log('Court elements after adding player:', this.courtElements);
             this.drawCourt('drill-court-canvas');
         } else if (this.currentTool === 'shot') {
             if (!this.selectedShotPlayer) {
@@ -311,14 +313,11 @@ class TennisTrainingApp {
     }
     
     drawStaticElements(ctx) {
-        console.log('Drawing static elements. Court elements:', this.courtElements);
-        
         // First, draw all player positions in sequence
         this.drawPlayerPositionSequence(ctx);
         
         // Draw shots with actual paths
         const shots = this.courtElements.filter(e => e.type === 'shot');
-        console.log('Found shots to draw:', shots);
         shots.forEach(element => {
             // Draw shot as red arrow
             ctx.strokeStyle = '#ff0000';
@@ -402,10 +401,6 @@ class TennisTrainingApp {
         const players = this.courtElements.filter(e => e.type === 'player');
         const shots = this.courtElements.filter(e => e.type === 'shot');
         const movements = this.courtElements.filter(e => e.type === 'movement');
-        
-        console.log('drawPlayerPositionSequence - Players:', players);
-        console.log('drawPlayerPositionSequence - Shots:', shots);
-        console.log('drawPlayerPositionSequence - Movements:', movements);
         
         // Build a complete sequence of all player positions using unified sequence
         const playerPositions = new Map();
@@ -538,6 +533,60 @@ class TennisTrainingApp {
         this.drawCourt('drill-court-canvas');
         // Reinitialize player positions
         this.initializePlayerPositions();
+    }
+
+    flipHorizontal() {
+        if (this.courtElements.length === 0) {
+            alert('No elements to flip!');
+            return;
+        }
+        
+        // Save state before flipping for undo
+        this.saveState('flip_horizontal');
+        
+        // Court dimensions from drawCourt function
+        const canvasWidth = 300;
+        const margin = 30;
+        const courtWidth = canvasWidth - (margin * 2);
+        const centerX = margin + courtWidth / 2; // 150px
+        
+        // Flip all elements horizontally
+        this.courtElements = this.courtElements.map(element => {
+            const flippedElement = { ...element };
+            
+            if (element.type === 'player') {
+                // Flip player position
+                flippedElement.x = centerX * 2 - element.x;
+            } else if (element.type === 'shot') {
+                // Flip shot start and end positions
+                flippedElement.startX = centerX * 2 - element.startX;
+                flippedElement.endX = centerX * 2 - element.endX;
+                // Y coordinates stay the same
+            } else if (element.type === 'movement') {
+                // Flip movement start and end positions
+                flippedElement.startX = centerX * 2 - element.startX;
+                flippedElement.endX = centerX * 2 - element.endX;
+                // Y coordinates stay the same
+            }
+            
+            return flippedElement;
+        });
+        
+        // Update current player positions mapping
+        this.initializePlayerPositions();
+        
+        // Redraw court
+        this.drawCourt('drill-court-canvas');
+        
+        // Visual feedback
+        const btn = document.getElementById('flip-horizontal-btn');
+        const originalText = btn.textContent;
+        btn.textContent = '✓ Flipped!';
+        btn.style.background = '#28a745';
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.background = '';
+        }, 1000);
     }
 
     drawCourt(canvasId, isPreviewMode = false) {
@@ -1968,11 +2017,7 @@ class TennisTrainingApp {
                 return element;
             });
             
-            console.log('Replicated elements:', this.courtElements);
-            console.log('Player ID mapping:', playerIdMapping);
-            
             this.initializePlayerPositions();
-            console.log('Current player positions after init:', this.currentPlayerPositions);
         }
         
         // Update modal title to indicate it's a replication
