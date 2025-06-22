@@ -27,6 +27,11 @@ class TennisTrainingApp {
         this.editingDrill = null;
         this.editingRoutine = null;
         
+        // Undo/Redo system
+        this.undoStack = [];
+        this.redoStack = [];
+        this.maxUndoSize = 50; // Limit undo history
+        
         this.init();
     }
 
@@ -84,6 +89,8 @@ class TennisTrainingApp {
         document.getElementById('add-movement-btn').addEventListener('click', () => this.setTool('movement'));
         document.getElementById('clear-court-btn').addEventListener('click', () => this.clearCourt());
         document.getElementById('preview-animation-btn').addEventListener('click', () => this.toggleAnimationPreview());
+        document.getElementById('undo-btn').addEventListener('click', () => this.undo());
+        document.getElementById('redo-btn').addEventListener('click', () => this.redo());
         document.getElementById('play-animation-btn').addEventListener('click', () => this.playAnimation());
         document.getElementById('pause-animation-btn').addEventListener('click', () => this.pauseAnimation());
         document.getElementById('reset-animation-btn').addEventListener('click', () => this.resetAnimation());
@@ -98,6 +105,23 @@ class TennisTrainingApp {
         document.getElementById('preview-pause-btn').addEventListener('click', () => this.pausePreviewAnimation());
         document.getElementById('preview-reset-btn').addEventListener('click', () => this.resetPreviewAnimation());
         document.getElementById('preview-timeline-slider').addEventListener('input', (e) => this.seekPreviewAnimation(e.target.value));
+        
+        // Add keyboard shortcuts for undo/redo
+        document.addEventListener('keydown', (e) => {
+            // Only apply shortcuts when drill modal is open and not typing in inputs
+            if (!document.getElementById('drill-modal').classList.contains('hidden') && 
+                !['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) {
+                if (e.ctrlKey || e.metaKey) {
+                    if (e.key === 'z' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.undo();
+                    } else if ((e.key === 'y') || (e.key === 'z' && e.shiftKey)) {
+                        e.preventDefault();
+                        this.redo();
+                    }
+                }
+            }
+        });
         
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && this.isMobileFullscreen) {
@@ -158,9 +182,13 @@ class TennisTrainingApp {
                 y: y,
                 id: Date.now()
             };
+            // Save state BEFORE making the change
+            this.saveState('add_player');
             this.courtElements.push(element);
             // Track current position
             this.currentPlayerPositions.set(element.id, { x: x, y: y });
+            console.log('Added player element:', element);
+            console.log('Court elements after adding player:', this.courtElements);
             this.drawCourt('drill-court-canvas');
         } else if (this.currentTool === 'shot') {
             if (!this.selectedShotPlayer) {
@@ -187,6 +215,8 @@ class TennisTrainingApp {
                     id: Date.now(),
                     sequence: this.getNextSequenceNumber()
                 };
+                // Save state BEFORE making the change
+                this.saveState('add_shot');
                 this.courtElements.push(element);
                 this.selectedShotPlayer = null;
                 this.drawCourt('drill-court-canvas');
@@ -214,6 +244,8 @@ class TennisTrainingApp {
                     id: Date.now(),
                     sequence: this.getNextSequenceNumber()
                 };
+                // Save state BEFORE making the change
+                this.saveState('add_movement');
                 this.courtElements.push(element);
                 // Update current position
                 this.currentPlayerPositions.set(this.selectedPlayer.id, { x: x, y: y });
@@ -279,11 +311,14 @@ class TennisTrainingApp {
     }
     
     drawStaticElements(ctx) {
+        console.log('Drawing static elements. Court elements:', this.courtElements);
+        
         // First, draw all player positions in sequence
         this.drawPlayerPositionSequence(ctx);
         
         // Draw shots with actual paths
         const shots = this.courtElements.filter(e => e.type === 'shot');
+        console.log('Found shots to draw:', shots);
         shots.forEach(element => {
             // Draw shot as red arrow
             ctx.strokeStyle = '#ff0000';
@@ -367,6 +402,10 @@ class TennisTrainingApp {
         const players = this.courtElements.filter(e => e.type === 'player');
         const shots = this.courtElements.filter(e => e.type === 'shot');
         const movements = this.courtElements.filter(e => e.type === 'movement');
+        
+        console.log('drawPlayerPositionSequence - Players:', players);
+        console.log('drawPlayerPositionSequence - Shots:', shots);
+        console.log('drawPlayerPositionSequence - Movements:', movements);
         
         // Build a complete sequence of all player positions using unified sequence
         const playerPositions = new Map();
@@ -482,6 +521,9 @@ class TennisTrainingApp {
     }
 
     clearCourt() {
+        if (this.courtElements.length > 0) {
+            this.saveState('clear_court');
+        }
         this.courtElements = [];
         this.currentTool = null;
         this.pendingShot = null;
@@ -586,6 +628,7 @@ class TennisTrainingApp {
         this.courtElements = [];
         this.currentTool = null;
         this.currentPlayerPositions.clear();
+        this.clearUndoRedoHistory(); // Clear undo/redo when starting new/editing drill
         document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
         this.drawCourt('drill-court-canvas');
         document.getElementById('drill-name').focus();
@@ -850,6 +893,7 @@ class TennisTrainingApp {
                 <div class="card-actions">
                     <button class="btn-small btn-edit" onclick="app.previewDrill(${drill.id})">Preview</button>
                     <button class="btn-small btn-edit" onclick="app.editDrill(${drill.id})">Edit</button>
+                    <button class="btn-small btn-replicate" onclick="app.replicateDrill(${drill.id})">Replicate</button>
                     <button class="btn-small btn-delete" onclick="app.deleteDrill(${drill.id})">Delete</button>
                 </div>
             </div>
@@ -889,6 +933,7 @@ class TennisTrainingApp {
                     </div>
                     <div class="card-actions">
                         <button class="btn-small btn-edit" onclick="app.editRoutine(${routine.id})">Edit</button>
+                        <button class="btn-small btn-replicate" onclick="app.replicateRoutine(${routine.id})">Replicate</button>
                         <button class="btn-small btn-delete" onclick="app.deleteRoutine(${routine.id})">Delete</button>
                     </div>
                 </div>
@@ -1871,6 +1916,72 @@ class TennisTrainingApp {
         this.drawCourt('drill-court-canvas');
     }
 
+    replicateDrill(drillId) {
+        const drill = this.drills.find(d => d.id === drillId);
+        if (!drill) {
+            alert('Drill not found');
+            return;
+        }
+        
+        // DON'T set editingDrill - treat this as a new drill creation
+        this.editingDrill = null;
+        
+        // Show modal first (this will clear elements)
+        this.showDrillModal();
+        
+        // Then populate form with replicated data
+        document.getElementById('drill-name').value = `${drill.name} (Copy)`;
+        document.getElementById('drill-description').value = drill.description || '';
+        document.getElementById('drill-duration').value = drill.duration;
+        
+        // Deep copy court elements with new IDs AFTER showing modal
+        if (drill.courtElements && drill.courtElements.length > 0) {
+            // Create a mapping of old player IDs to new player IDs
+            const playerIdMapping = new Map();
+            
+            // First pass: create new IDs for all elements and build player ID mapping
+            this.courtElements = drill.courtElements.map(element => {
+                const newId = Date.now() + Math.random() * 1000 + Math.floor(Math.random() * 1000);
+                
+                // If it's a player, store the ID mapping
+                if (element.type === 'player') {
+                    playerIdMapping.set(element.id, newId);
+                }
+                
+                return {
+                    ...element,
+                    id: newId
+                };
+            });
+            
+            // Second pass: update playerId references in shots and movements
+            this.courtElements = this.courtElements.map(element => {
+                if ((element.type === 'shot' || element.type === 'movement') && element.playerId) {
+                    const newPlayerId = playerIdMapping.get(element.playerId);
+                    if (newPlayerId) {
+                        return {
+                            ...element,
+                            playerId: newPlayerId
+                        };
+                    }
+                }
+                return element;
+            });
+            
+            console.log('Replicated elements:', this.courtElements);
+            console.log('Player ID mapping:', playerIdMapping);
+            
+            this.initializePlayerPositions();
+            console.log('Current player positions after init:', this.currentPlayerPositions);
+        }
+        
+        // Update modal title to indicate it's a replication
+        document.querySelector('#drill-modal .modal-header h3').textContent = 'Create Drill (Replicated)';
+        
+        // Draw court with replicated elements
+        this.drawCourt('drill-court-canvas');
+    }
+
     editRoutine(routineId) {
         const routine = this.routines.find(r => r.id === routineId);
         if (!routine) {
@@ -1903,6 +2014,46 @@ class TennisTrainingApp {
         }, 100);
     }
 
+    replicateRoutine(routineId) {
+        const routine = this.routines.find(r => r.id === routineId);
+        if (!routine) {
+            alert('Routine not found');
+            return;
+        }
+        
+        // Create a copy of the routine with new ID and modified name
+        const replicatedRoutine = {
+            ...routine,
+            id: Date.now(), // Generate new ID
+            name: `${routine.name} (Copy)`,
+            drillIds: [...routine.drillIds] // Copy drill IDs array
+        };
+        
+        // Set editing mode with the replicated routine
+        this.editingRoutine = replicatedRoutine;
+        
+        // Populate form with replicated data
+        document.getElementById('routine-name').value = replicatedRoutine.name;
+        document.getElementById('routine-description').value = replicatedRoutine.description || '';
+        
+        // Update modal title to indicate it's a replication
+        document.querySelector('#routine-modal .modal-header h3').textContent = 'Replicate Routine';
+        
+        // Show modal and render drill selection
+        this.showRoutineModal();
+        
+        // Pre-select the drills that are in the replicated routine
+        setTimeout(() => {
+            const drillIds = replicatedRoutine.drillIds || [];
+            drillIds.forEach(drillId => {
+                const checkbox = document.querySelector(`input[value="${drillId}"]`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                }
+            });
+        }, 100);
+    }
+
     async loadData() {
         try {
             const [drillsResponse, routinesResponse] = await Promise.all([
@@ -1920,6 +2071,94 @@ class TennisTrainingApp {
         } catch (error) {
             console.error('Error loading data:', error);
         }
+    }
+    
+    // Undo/Redo system methods
+    saveState(action = 'edit') {
+        // Deep copy the current court elements
+        const state = {
+            courtElements: JSON.parse(JSON.stringify(this.courtElements)),
+            currentPlayerPositions: new Map(this.currentPlayerPositions),
+            action: action,
+            timestamp: Date.now()
+        };
+        
+        // Add to undo stack
+        this.undoStack.push(state);
+        
+        // Clear redo stack when new action is performed
+        this.redoStack = [];
+        
+        // Limit undo stack size
+        if (this.undoStack.length > this.maxUndoSize) {
+            this.undoStack.shift();
+        }
+        
+        this.updateUndoRedoButtons();
+    }
+    
+    undo() {
+        if (this.undoStack.length === 0) return;
+        
+        // Save current state to redo stack
+        const currentState = {
+            courtElements: JSON.parse(JSON.stringify(this.courtElements)),
+            currentPlayerPositions: new Map(this.currentPlayerPositions),
+            action: 'current',
+            timestamp: Date.now()
+        };
+        this.redoStack.push(currentState);
+        
+        // Restore previous state
+        const previousState = this.undoStack.pop();
+        this.courtElements = JSON.parse(JSON.stringify(previousState.courtElements));
+        this.currentPlayerPositions = new Map(previousState.currentPlayerPositions);
+        
+        // Redraw court
+        this.drawCourt('drill-court-canvas');
+        
+        this.updateUndoRedoButtons();
+    }
+    
+    redo() {
+        if (this.redoStack.length === 0) return;
+        
+        // Save current state to undo stack
+        const currentState = {
+            courtElements: JSON.parse(JSON.stringify(this.courtElements)),
+            currentPlayerPositions: new Map(this.currentPlayerPositions),
+            action: 'undo',
+            timestamp: Date.now()
+        };
+        this.undoStack.push(currentState);
+        
+        // Restore next state
+        const nextState = this.redoStack.pop();
+        this.courtElements = JSON.parse(JSON.stringify(nextState.courtElements));
+        this.currentPlayerPositions = new Map(nextState.currentPlayerPositions);
+        
+        // Redraw court
+        this.drawCourt('drill-court-canvas');
+        
+        this.updateUndoRedoButtons();
+    }
+    
+    updateUndoRedoButtons() {
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        
+        if (undoBtn) {
+            undoBtn.disabled = this.undoStack.length === 0;
+        }
+        if (redoBtn) {
+            redoBtn.disabled = this.redoStack.length === 0;
+        }
+    }
+    
+    clearUndoRedoHistory() {
+        this.undoStack = [];
+        this.redoStack = [];
+        this.updateUndoRedoButtons();
     }
 }
 
