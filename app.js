@@ -27,6 +27,9 @@ class TennisTrainingApp {
         this.editingDrill = null;
         this.editingRoutine = null;
         
+        // Routine drill ordering
+        this.selectedDrillOrder = []; // Array to maintain drill order
+        
         // Undo/Redo system
         this.undoStack = [];
         this.redoStack = [];
@@ -44,28 +47,23 @@ class TennisTrainingApp {
         this.updateRoutineSelect();
         this.showSection('drills');
         
-        // Set up height monitoring
-        window.addEventListener('resize', () => this.checkMinimumHeight());
+        // Set up responsive canvas sizing
+        this.setupResponsiveCanvas();
+        
+        // Set up canvas resizing on window resize
+        window.addEventListener('resize', () => {
+            this.setupResponsiveCanvas();
+        });
     }
 
     checkMinimumHeight() {
-        const minHeight = 700;
-        const currentHeight = window.innerHeight;
+        // Removed minimum height requirement - app is now fully responsive
         const heightWarning = document.getElementById('height-warning');
         const app = document.getElementById('app');
-        const currentHeightSpan = document.getElementById('current-height');
         
-        if (currentHeightSpan) {
-            currentHeightSpan.textContent = currentHeight;
-        }
-        
-        if (currentHeight < minHeight) {
-            heightWarning.style.display = 'flex';
-            app.style.display = 'none';
-        } else {
-            heightWarning.style.display = 'none';
-            app.style.display = 'flex';
-        }
+        // Always show the app
+        heightWarning.style.display = 'none';
+        app.style.display = 'flex';
     }
 
     bindEvents() {
@@ -148,6 +146,64 @@ class TennisTrainingApp {
 
         const sessionCanvas = document.getElementById('court-canvas');
         sessionCanvas.addEventListener('click', (e) => this.handleCanvasClick(e, 'session'));
+    }
+    
+    setupResponsiveCanvas() {
+        // Calculate optimal canvas size for different screens
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        
+        let canvasWidth, canvasHeight;
+        
+        // Tennis court aspect ratio (width:height = 1:2)
+        const courtAspectRatio = 0.5;
+        
+        if (viewportWidth <= 480) {
+            // Mobile phones
+            canvasWidth = Math.min(viewportWidth * 0.85, 250);
+            canvasHeight = canvasWidth / courtAspectRatio;
+        } else if (viewportWidth <= 768) {
+            // Tablets
+            canvasWidth = Math.min(viewportWidth * 0.6, 300);
+            canvasHeight = canvasWidth / courtAspectRatio;
+        } else if (viewportWidth <= 1024) {
+            // Small laptops
+            canvasWidth = Math.min(viewportWidth * 0.35, 320);
+            canvasHeight = canvasWidth / courtAspectRatio;
+        } else {
+            // Large screens
+            canvasWidth = Math.min(viewportWidth * 0.25, 400);
+            canvasHeight = canvasWidth / courtAspectRatio;
+        }
+        
+        // Ensure canvas height doesn't exceed available viewport height
+        const maxHeight = viewportHeight * 0.6;
+        if (canvasHeight > maxHeight) {
+            canvasHeight = maxHeight;
+            canvasWidth = canvasHeight * courtAspectRatio;
+        }
+        
+        // Apply sizing to all canvases
+        this.resizeCanvas('drill-court-canvas', canvasWidth, canvasHeight);
+        this.resizeCanvas('court-canvas', canvasWidth, canvasHeight);
+        this.resizeCanvas('preview-court-canvas', canvasWidth, canvasHeight);
+    }
+    
+    resizeCanvas(canvasId, width, height) {
+        const canvas = document.getElementById(canvasId);
+        if (canvas) {
+            canvas.width = width;
+            canvas.height = height;
+            canvas.style.width = width + 'px';
+            canvas.style.height = height + 'px';
+            
+            // Redraw court if it has elements
+            if (canvasId === 'drill-court-canvas' && this.courtElements.length > 0) {
+                this.drawCourt(canvasId);
+            } else if (canvasId === 'court-canvas' && this.currentSession) {
+                this.drawCourt(canvasId);
+            }
+        }
     }
 
     handleCanvasClick(e, canvasType) {
@@ -710,6 +766,7 @@ class TennisTrainingApp {
 
     showRoutineModal() {
         document.getElementById('routine-modal').classList.remove('hidden');
+        this.selectedDrillOrder = []; // Reset drill order
         this.renderDrillSelection();
         document.getElementById('routine-name').focus();
     }
@@ -720,6 +777,7 @@ class TennisTrainingApp {
         
         // Reset editing state
         this.editingRoutine = null;
+        this.selectedDrillOrder = []; // Reset drill order
         
         // Reset modal title to default
         document.querySelector('#routine-modal .modal-header h3').textContent = 'Create New Routine';
@@ -730,18 +788,80 @@ class TennisTrainingApp {
         
         if (this.drills.length === 0) {
             container.innerHTML = '<p style="text-align: center; color: #666;">No drills available. Create some drills first.</p>';
+            this.renderDrillOrder();
             return;
         }
         
         container.innerHTML = this.drills.map(drill => `
             <div class="drill-checkbox">
-                <input type="checkbox" id="drill-${drill.id}" value="${drill.id}">
+                <input type="checkbox" id="drill-${drill.id}" value="${drill.id}" onchange="app.updateDrillSelection(${drill.id}, this.checked)">
                 <label for="drill-${drill.id}">
                     <strong>${drill.name}</strong> (${drill.duration}min)
                     ${drill.description ? `<br><small>${drill.description}</small>` : ''}
                 </label>
             </div>
         `).join('');
+        
+        this.renderDrillOrder();
+    }
+
+    updateDrillSelection(drillId, isSelected) {
+        if (isSelected) {
+            // Add drill to order if not already present
+            if (!this.selectedDrillOrder.includes(drillId)) {
+                this.selectedDrillOrder.push(drillId);
+            }
+        } else {
+            // Remove drill from order
+            this.selectedDrillOrder = this.selectedDrillOrder.filter(id => id !== drillId);
+        }
+        this.renderDrillOrder();
+    }
+
+    renderDrillOrder() {
+        const container = document.getElementById('routine-drill-order');
+        
+        if (this.selectedDrillOrder.length === 0) {
+            container.innerHTML = '<p style="color: #666; font-style: italic;">Selected drills will appear here. Use ↑↓ to reorder.</p>';
+            return;
+        }
+        
+        container.innerHTML = this.selectedDrillOrder.map((drillId, index) => {
+            const drill = this.drills.find(d => d.id === drillId);
+            if (!drill) return '';
+            
+            return `
+                <div class="drill-order-item" data-drill-id="${drillId}">
+                    <div class="drill-order-number">${index + 1}</div>
+                    <div class="drill-order-info">
+                        <div class="drill-order-name">${drill.name}</div>
+                        <div class="drill-order-details">${drill.duration}min${drill.description ? ` • ${drill.description}` : ''}</div>
+                    </div>
+                    <div class="drill-order-controls">
+                        <button type="button" class="drill-order-btn" onclick="app.moveDrillUp(${index})" ${index === 0 ? 'disabled' : ''}>↑</button>
+                        <button type="button" class="drill-order-btn" onclick="app.moveDrillDown(${index})" ${index === this.selectedDrillOrder.length - 1 ? 'disabled' : ''}>↓</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    moveDrillUp(index) {
+        if (index > 0) {
+            // Swap with previous element
+            [this.selectedDrillOrder[index], this.selectedDrillOrder[index - 1]] = 
+            [this.selectedDrillOrder[index - 1], this.selectedDrillOrder[index]];
+            this.renderDrillOrder();
+        }
+    }
+
+    moveDrillDown(index) {
+        if (index < this.selectedDrillOrder.length - 1) {
+            // Swap with next element
+            [this.selectedDrillOrder[index], this.selectedDrillOrder[index + 1]] = 
+            [this.selectedDrillOrder[index + 1], this.selectedDrillOrder[index]];
+            this.renderDrillOrder();
+        }
     }
 
     async saveDrill(e) {
@@ -807,10 +927,7 @@ class TennisTrainingApp {
     async saveRoutine(e) {
         e.preventDefault();
         
-        const selectedDrills = Array.from(document.querySelectorAll('#routine-drills-selection input:checked'))
-            .map(checkbox => parseInt(checkbox.value));
-        
-        if (selectedDrills.length === 0) {
+        if (this.selectedDrillOrder.length === 0) {
             alert('Please select at least one drill for the routine.');
             return;
         }
@@ -818,7 +935,7 @@ class TennisTrainingApp {
         const routine = {
             name: document.getElementById('routine-name').value,
             description: document.getElementById('routine-description').value,
-            drillIds: selectedDrills
+            drillIds: this.selectedDrillOrder // Use the ordered array
         };
         
         try {
@@ -975,9 +1092,9 @@ class TennisTrainingApp {
                         <span>Duration: ${totalDuration}min</span>
                     </div>
                     <div class="routine-drills">
-                        <h4>Drills:</h4>
+                        <h4>Drills (in order):</h4>
                         <ul>
-                            ${routineDrills.map(drill => `<li>${drill.name} (${drill.duration}min)</li>`).join('')}
+                            ${routineDrills.map((drill, index) => `<li><strong>${index + 1}.</strong> ${drill.name} (${drill.duration}min)</li>`).join('')}
                         </ul>
                     </div>
                     <div class="card-actions">
@@ -1192,8 +1309,13 @@ class TennisTrainingApp {
         const tools = document.getElementById('drill-tools');
         
         container.classList.add('mobile-fullscreen');
-        canvas.width = Math.min(window.innerWidth * 0.9, 400);
-        canvas.height = Math.min(window.innerHeight * 0.7, 800);
+        
+        // Use larger dimensions for fullscreen mobile
+        const fullscreenWidth = Math.min(window.innerWidth * 0.9, 350);
+        const fullscreenHeight = fullscreenWidth / 0.5; // Maintain 1:2 aspect ratio
+        
+        canvas.width = fullscreenWidth;
+        canvas.height = Math.min(fullscreenHeight, window.innerHeight * 0.7);
         
         const closeBtn = document.createElement('button');
         closeBtn.textContent = 'Close';
@@ -1218,8 +1340,9 @@ class TennisTrainingApp {
         const canvas = document.getElementById('drill-court-canvas');
         
         container.classList.remove('mobile-fullscreen');
-        canvas.width = 300;
-        canvas.height = 600;
+        
+        // Restore responsive sizing instead of fixed dimensions
+        this.setupResponsiveCanvas();
         
         const controls = container.querySelector('.mobile-fullscreen-controls');
         if (controls) {
@@ -2047,7 +2170,10 @@ class TennisTrainingApp {
         // Show modal and render drill selection
         this.showRoutineModal();
         
-        // Pre-select the drills that are in this routine
+        // Restore the drill order
+        this.selectedDrillOrder = [...(routine.drillIds || [])];
+        
+        // Pre-select the drills that are in this routine and render order
         setTimeout(() => {
             const drillIds = routine.drillIds || [];
             drillIds.forEach(drillId => {
@@ -2056,6 +2182,7 @@ class TennisTrainingApp {
                     checkbox.checked = true;
                 }
             });
+            this.renderDrillOrder();
         }, 100);
     }
 

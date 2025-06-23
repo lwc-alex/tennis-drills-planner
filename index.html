@@ -70,7 +70,7 @@
                             <p id="drill-description"></p>
                         </div>
                         <div id="court-container">
-                            <canvas id="court-canvas" width="300" height="600"></canvas>
+                            <canvas id="court-canvas"></canvas>
                             <div id="session-animation-controls" class="animation-controls">
                                 <button type="button" id="session-play-animation-btn" class="control-btn">▶️ Animation</button>
                                 <button type="button" id="session-pause-animation-btn" class="control-btn hidden">⏸️</button>
@@ -114,7 +114,7 @@
                     <div class="form-group">
                         <label>Court Setup:</label>
                         <div id="drill-court-container">
-                            <canvas id="drill-court-canvas" width="300" height="600"></canvas>
+                            <canvas id="drill-court-canvas"></canvas>
                         </div>
                         <div id="drill-tools">
                             <button type="button" id="add-player-btn" class="tool-btn">Add Player</button>
@@ -168,7 +168,7 @@
                 </div>
                 <div class="form-group">
                     <div id="preview-court-container">
-                        <canvas id="preview-court-canvas" width="300" height="600"></canvas>
+                        <canvas id="preview-court-canvas"></canvas>
                     </div>
                     <div id="preview-animation-controls">
                         <button type="button" id="preview-play-btn" class="control-btn">▶️</button>
@@ -202,6 +202,12 @@
                     <div class="form-group">
                         <label>Select Drills:</label>
                         <div id="routine-drills-selection"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Drill Order:</label>
+                        <div id="routine-drill-order">
+                            <p style="color: #666; font-style: italic;">Selected drills will appear here. Use ↑↓ to reorder.</p>
+                        </div>
                     </div>
                     <div class="modal-actions">
                         <button type="button" id="cancel-routine" class="secondary-btn">Cancel</button>
