@@ -1182,7 +1182,7 @@ class TennisTrainingApp {
     }
 
     startSession() {
-        const routineId = parseInt(document.getElementById('routine-select').value);
+        const routineId = document.getElementById('routine-select').value;
         if (!routineId) {
             alert('Please select a routine first.');
             return;
