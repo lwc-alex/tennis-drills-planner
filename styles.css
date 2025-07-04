@@ -664,9 +664,16 @@ main {
     margin-bottom: 2rem;
 }
 
-#court-container {
-    margin: 1rem 0;
+#session-layout {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
     width: 100%;
+}
+
+#court-container {
+    flex: 1;
+    min-width: 0;
 }
 
 #drill-info {
@@ -687,8 +694,13 @@ main {
 
 #timer-container {
     text-align: center;
-    margin-top: 1rem;
-    padding-bottom: 2rem;
+    flex-shrink: 0;
+    min-width: 200px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    margin-left: 1rem;
 }
 
 #timer-display {
@@ -864,8 +876,47 @@ main {
     }
 }
 
-/* Mobile and small tablet styles */
-@media (max-width: 768px) {
+/* iPad and larger tablets - horizontal layout */
+@media (min-width: 768px) {
+    #session-layout {
+        flex-direction: row !important;
+        gap: 1.5rem;
+    }
+    
+    #timer-container {
+        min-width: 180px;
+        padding: 1.25rem;
+        margin-left: 0;
+    }
+    
+    #timer-display {
+        font-size: 2.2rem;
+    }
+    
+    .control-btn {
+        padding: 0.6rem 1rem;
+        font-size: 0.95rem;
+    }
+}
+
+/* Large screens - wider gap */
+@media (min-width: 1025px) {
+    #session-layout {
+        gap: 2rem;
+    }
+}
+
+/* Small phones only - vertical layout */  
+@media (max-width: 667px) {
+    #session-layout {
+        flex-direction: column !important;
+        gap: 1rem;
+    }
+    
+    #timer-container {
+        margin-left: 0;
+        min-width: auto;
+    }
     header {
         padding: 1rem;
     }
@@ -967,8 +1018,43 @@ main {
     }
 }
 
-/* iPhone and small mobile styles */
-@media (max-width: 480px) {
+/* iPhone landscape - use horizontal layout */
+@media (max-width: 667px) and (orientation: landscape) and (min-height: 400px) {
+    #session-layout {
+        flex-direction: row !important;
+        gap: 1rem;
+    }
+    
+    #timer-container {
+        min-width: 140px;
+        padding: 0.75rem;
+        margin-left: 0;
+    }
+    
+    #timer-display {
+        font-size: 1.8rem;
+    }
+    
+    .control-btn {
+        padding: 0.4rem 0.6rem;
+        font-size: 0.8rem;
+        min-width: 35px;
+    }
+}
+
+/* iPhone portrait - vertical layout */
+@media (max-width: 480px) and (orientation: portrait) {
+    #session-layout {
+        flex-direction: column !important;
+        gap: 1rem;
+    }
+    
+    #timer-container {
+        margin-left: 0;
+        min-width: auto;
+        padding: 1rem;
+    }
+    
     header {
         padding: 0.5rem;
     }
@@ -999,9 +1085,12 @@ main {
         padding: 0.6rem 1rem;
         font-size: 0.9rem;
     }
-}/* Landscape orientation adjustments */
+}
+
+/* Landscape orientation adjustments */
 @media (max-height: 500px) and (orientation: landscape) {
-    #drill-court-container, #preview-court-container {
+    #drill-court-container,
+    #preview-court-container {
         padding: 0.25rem;
     }
     
@@ -1015,3 +1104,138 @@ main {
 }
 
 /* Cache buster: Sun Jun 23 10:05:00 AEST 2025 */
+
+.login-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #e0f2f7, #c2e0f0); /* Light blue gradient */
+    padding: 2rem;
+    text-align: center;
+}
+
+.login-container h2 {
+    font-size: 2.5rem;
+    color: #2c5530;
+    margin-bottom: 1rem;
+}
+
+.login-container p {
+    font-size: 1.1rem;
+    color: #555;
+    margin-bottom: 2rem;
+}
+
+.signin-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 300px;
+    padding: 0.8rem 1.5rem;
+    margin-bottom: 1rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    border: none;
+}
+
+.google-btn {
+    background-color: #4285F4;
+    color: white;
+}
+
+.google-btn:hover {
+    background-color: #357ae8;
+    box-shadow: 0 4px 10px rgba(66, 133, 244, 0.3);
+}
+
+.github-btn {
+    background-color: #333;
+    color: white;
+}
+
+.github-btn:hover {
+    background-color: #000;
+    box-shadow: 0 4px 10px rgba(51, 51, 51, 0.3);
+}
+
+.email-btn {
+    background-color: #4a7c59;
+    color: white;
+}
+
+.email-btn:hover {
+    background-color: #2c5530;
+    box-shadow: 0 4px 10px rgba(74, 124, 89, 0.3);
+}
+
+.or-separator {
+    margin: 1.5rem 0;
+    color: #888;
+    position: relative;
+    width: 100%;
+    max-width: 300px;
+}
+
+.or-separator::before, .or-separator::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: #ddd;
+}
+
+.or-separator::before {
+    left: 0;
+}
+
+.or-separator::after {
+    right: 0;
+}
+
+.or-separator span {
+    background: #e0f2f7;
+    padding: 0 10px;
+    position: relative;
+    z-index: 1;
+}
+
+.email-signin-form {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 300px;
+}
+
+.email-signin-form input[type="email"],
+.email-signin-form input[type="password"] {
+    padding: 0.8rem;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+}
+
+.signup-toggle {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.signup-toggle input[type="checkbox"] {
+    margin-right: 0.5rem;
+}
+
+#email-sent-message {
+    color: #28a745;
+    font-weight: 600;
+    margin-top: 1rem;
+}

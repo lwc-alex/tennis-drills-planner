@@ -23,13 +23,27 @@
         </div>
     </div>
 
-    <div id="app">
+    <div id="login-section" class="login-container">
+        <h2>Tennis Training Planner</h2>
+        <p>Sign in to access your drills and routines.</p>
+        <form id="email-signin-form" class="email-signin-form">
+            <input type="email" id="email-input" placeholder="Enter your email" required>
+            <input type="password" id="password-input" placeholder="Enter your password" required>
+            <label class="signup-toggle">
+                <input type="checkbox" id="signup-mode"> Sign up for new account
+            </label>
+            <button type="submit" class="signin-btn email-btn">Sign In / Sign Up</button>
+        </form>
+    </div>
+
+    <div id="app" class="hidden">
         <header>
             <h1>Tennis Training Planner</h1>
             <nav>
                 <button id="nav-drills" class="nav-btn active">Drills</button>
                 <button id="nav-routines" class="nav-btn">Routines</button>
-                <button id="nav-player" class="nav-btn">Player</button>
+                <button id="nav-player" class="nav-btn">Train</button>
+                <button id="logout-btn" class="nav-btn">Logout</button>
             </nav>
         </header>
 
@@ -69,21 +83,23 @@
                             <h3 id="current-drill-name"></h3>
                             <p id="drill-description"></p>
                         </div>
-                        <div id="court-container">
-                            <canvas id="court-canvas"></canvas>
-                            <div id="session-animation-controls" class="animation-controls">
-                                <button type="button" id="session-play-animation-btn" class="control-btn">▶️ Animation</button>
-                                <button type="button" id="session-pause-animation-btn" class="control-btn hidden">⏸️</button>
-                                <button type="button" id="session-reset-animation-btn" class="control-btn hidden">⏮️</button>
+                        <div id="session-layout">
+                            <div id="court-container">
+                                <canvas id="court-canvas"></canvas>
+                                <div id="session-animation-controls" class="animation-controls">
+                                    <button type="button" id="session-play-animation-btn" class="control-btn">▶️ Animation</button>
+                                    <button type="button" id="session-pause-animation-btn" class="control-btn hidden">⏸️</button>
+                                    <button type="button" id="session-reset-animation-btn" class="control-btn hidden">⏮️</button>
+                                </div>
                             </div>
-                        </div>
-                        <div id="timer-container">
-                            <div id="timer-display">00:00</div>
-                            <div id="session-controls-active">
-                                <button id="play-pause-btn" class="control-btn">▶️</button>
-                                <button id="prev-drill-btn" class="control-btn">⏮️</button>
-                                <button id="next-drill-btn" class="control-btn">⏭️</button>
-                                <button id="stop-session-btn" class="control-btn">⏹️</button>
+                            <div id="timer-container">
+                                <div id="timer-display">00:00</div>
+                                <div id="session-controls-active">
+                                    <button id="play-pause-btn" class="control-btn">▶️</button>
+                                    <button id="prev-drill-btn" class="control-btn">⏮️</button>
+                                    <button id="next-drill-btn" class="control-btn">⏭️</button>
+                                    <button id="stop-session-btn" class="control-btn">⏹️</button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -109,7 +125,7 @@
                     </div>
                     <div class="form-group">
                         <label for="drill-duration">Duration (minutes):</label>
-                        <input type="number" id="drill-duration" value="2" min="1" max="30" step="0.5">
+                        <input type="number" id="drill-duration" value="2" min="1" max="60" step="0.5">
                     </div>
                     <div class="form-group">
                         <label>Court Setup:</label>
@@ -218,6 +234,8 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="supabaseClient.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
