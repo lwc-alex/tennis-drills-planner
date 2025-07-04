@@ -880,7 +880,7 @@ class TennisTrainingApp {
         
         container.innerHTML = this.drills.map(drill => `
             <div class="drill-checkbox">
-                <input type="checkbox" id="drill-${drill.id}" value="${drill.id}" onchange="app.updateDrillSelection(${drill.id}, this.checked)">
+                <input type="checkbox" id="drill-${drill.id}" value="${drill.id}" onchange="app.updateDrillSelection('${drill.id}', this.checked)">
                 <label for="drill-${drill.id}">
                     <strong>${drill.name}</strong> (${drill.duration}min)
                     ${drill.description ? `<br><small>${drill.description}</small>` : ''}
@@ -1125,10 +1125,10 @@ class TennisTrainingApp {
                     <span>Elements: ${drill.courtElements?.length || 0}</span>
                 </div>
                 <div class="card-actions">
-                    <button class="btn-small btn-edit" onclick="app.previewDrill(${drill.id})">Preview</button>
-                    <button class="btn-small btn-edit" onclick="app.editDrill(${drill.id})">Edit</button>
-                    <button class="btn-small btn-replicate" onclick="app.replicateDrill(${drill.id})">Replicate</button>
-                    <button class="btn-small btn-delete" onclick="app.deleteDrill(${drill.id})">Delete</button>
+                    <button class="btn-small btn-edit" onclick="app.previewDrill('${drill.id}')">Preview</button>
+                    <button class="btn-small btn-edit" onclick="app.editDrill('${drill.id}')">Edit</button>
+                    <button class="btn-small btn-replicate" onclick="app.replicateDrill('${drill.id}')">Replicate</button>
+                    <button class="btn-small btn-delete" onclick="app.deleteDrill('${drill.id}')">Delete</button>
                 </div>
             </div>
         `).join('');
@@ -1166,9 +1166,9 @@ class TennisTrainingApp {
                         </ul>
                     </div>
                     <div class="card-actions">
-                        <button class="btn-small btn-edit" onclick="app.editRoutine(${routine.id})">Edit</button>
-                        <button class="btn-small btn-replicate" onclick="app.replicateRoutine(${routine.id})">Replicate</button>
-                        <button class="btn-small btn-delete" onclick="app.deleteRoutine(${routine.id})">Delete</button>
+                        <button class="btn-small btn-edit" onclick="app.editRoutine('${routine.id}')">Edit</button>
+                        <button class="btn-small btn-replicate" onclick="app.replicateRoutine('${routine.id}')">Replicate</button>
+                        <button class="btn-small btn-delete" onclick="app.deleteRoutine('${routine.id}')">Delete</button>
                     </div>
                 </div>
             `;
