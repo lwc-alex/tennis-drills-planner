@@ -35,17 +35,18 @@ class TennisTrainingApp {
         this.redoStack = [];
         this.maxUndoSize = 50; // Limit undo history
         
+        this.user = null;
         this.init();
     }
 
     async init() {
+        // Ensure initial display state: login visible, app hidden
+        document.getElementById('login-section').classList.remove('hidden');
+        document.getElementById('app').classList.add('hidden');
+
         this.checkMinimumHeight();
         this.bindEvents();
-        await this.loadData();
-        this.renderDrills();
-        this.renderRoutines();
-        this.updateRoutineSelect();
-        this.showSection('drills');
+        this.setupAuth();
         
         // Set up responsive canvas sizing
         this.setupResponsiveCanvas();
@@ -57,16 +58,22 @@ class TennisTrainingApp {
     }
 
     checkMinimumHeight() {
-        // Removed minimum height requirement - app is now fully responsive
         const heightWarning = document.getElementById('height-warning');
-        const app = document.getElementById('app');
+        const currentHeight = window.innerHeight;
+        const minHeight = 700;
         
-        // Always show the app
-        heightWarning.style.display = 'none';
-        app.style.display = 'flex';
+        document.getElementById('current-height').textContent = currentHeight;
+        
+        if (currentHeight < minHeight) {
+            heightWarning.style.display = 'flex';
+        } else {
+            heightWarning.style.display = 'none';
+        }
     }
 
     bindEvents() {
+        document.getElementById('logout-btn').addEventListener('click', () => this.handleLogout());
+        document.getElementById('email-signin-form').addEventListener('submit', (e) => this.signInWithEmail(e));
         document.getElementById('nav-drills').addEventListener('click', () => this.showSection('drills'));
         document.getElementById('nav-routines').addEventListener('click', () => this.showSection('routines'));
         document.getElementById('nav-player').addEventListener('click', () => this.showSection('player'));
@@ -138,6 +145,83 @@ class TennisTrainingApp {
         document.getElementById('stop-session-btn').addEventListener('click', () => this.stopSession());
 
         this.setupCanvasEvents();
+    }
+
+    async setupAuth() {
+        // Check for existing session first
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+            this.user = session.user;
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('app').classList.remove('hidden');
+            await this.loadData();
+            this.renderDrills();
+            this.renderRoutines();
+            this.updateRoutineSelect();
+            this.showSection('drills');
+        }
+
+        // Listen for auth state changes
+        supabase.auth.onAuthStateChange(async (event, session) => {
+            if (session) {
+                this.user = session.user;
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+                await this.loadData();
+                this.renderDrills();
+                this.renderRoutines();
+                this.updateRoutineSelect();
+                this.showSection('drills');
+            } else {
+                this.user = null;
+                document.getElementById('login-section').classList.remove('hidden');
+                document.getElementById('app').classList.add('hidden');
+            }
+        });
+    }
+
+    async signInWithEmail(e) {
+        e.preventDefault();
+        const email = document.getElementById('email-input').value;
+        const password = document.getElementById('password-input').value;
+        const isSignUp = document.getElementById('signup-mode').checked;
+
+        if (isSignUp) {
+            const { error } = await supabase.auth.signUp({
+                email: email,
+                password: password
+            });
+            if (error) {
+                console.error('Error signing up:', error.message);
+                alert('Error signing up: ' + error.message);
+            } else {
+                alert('Account created successfully! Please check your email for verification.');
+            }
+        } else {
+            const { error } = await supabase.auth.signInWithPassword({
+                email: email,
+                password: password
+            });
+            if (error) {
+                console.error('Error signing in:', error.message);
+                alert('Error signing in: ' + error.message);
+            }
+        }
+    }
+
+    async handleLogout() {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error('Error logging out:', error.message);
+            alert('Error logging out: ' + error.message);
+        } else {
+            this.drills = [];
+            this.routines = [];
+            this.renderDrills();
+            this.renderRoutines();
+            this.updateRoutineSelect();
+            this.showSection('drills'); // Show drills section even if empty
+        }
     }
 
     setupCanvasEvents() {
@@ -600,26 +684,28 @@ class TennisTrainingApp {
         // Save state before flipping for undo
         this.saveState('flip_horizontal');
         
-        // Court dimensions from drawCourt function
-        const canvasWidth = 300;
+        // Get actual canvas dimensions (responsive)
+        const canvas = document.getElementById('drill-court-canvas');
+        const canvasWidth = canvas.width;
         const margin = 30;
         const courtWidth = canvasWidth - (margin * 2);
-        const centerX = margin + courtWidth / 2; // 150px
+        const centerX = margin + courtWidth / 2; // Vertical center line of court
         
-        // Flip all elements horizontally
+        // Flip all elements horizontally (left-right across vertical center line)
         this.courtElements = this.courtElements.map(element => {
             const flippedElement = { ...element };
             
             if (element.type === 'player') {
-                // Flip player position
+                // Flip player position left-right
                 flippedElement.x = centerX * 2 - element.x;
+                // Y coordinate stays the same
             } else if (element.type === 'shot') {
-                // Flip shot start and end positions
+                // Flip shot start and end positions left-right
                 flippedElement.startX = centerX * 2 - element.startX;
                 flippedElement.endX = centerX * 2 - element.endX;
                 // Y coordinates stay the same
             } else if (element.type === 'movement') {
-                // Flip movement start and end positions
+                // Flip movement start and end positions left-right
                 flippedElement.startX = centerX * 2 - element.startX;
                 flippedElement.endX = centerX * 2 - element.endX;
                 // Y coordinates stay the same
@@ -794,7 +880,7 @@ class TennisTrainingApp {
         
         container.innerHTML = this.drills.map(drill => `
             <div class="drill-checkbox">
-                <input type="checkbox" id="drill-${drill.id}" value="${drill.id}" onchange="app.updateDrillSelection(${drill.id}, this.checked)">
+                <input type="checkbox" id="drill-${drill.id}" value="${drill.id}" onchange="app.updateDrillSelection('${drill.id}', this.checked)">
                 <label for="drill-${drill.id}">
                     <strong>${drill.name}</strong> (${drill.duration}min)
                     ${drill.description ? `<br><small>${drill.description}</small>` : ''}
@@ -867,11 +953,12 @@ class TennisTrainingApp {
     async saveDrill(e) {
         e.preventDefault();
         
-        const drill = {
+        const drillData = {
             name: document.getElementById('drill-name').value,
             description: document.getElementById('drill-description').value,
             duration: parseFloat(document.getElementById('drill-duration').value),
-            courtElements: [...this.courtElements]
+            court_elements: this.courtElements, // Use court_elements for Supabase
+            user_id: this.user.id // Add user_id
         };
         
         try {
@@ -879,48 +966,39 @@ class TennisTrainingApp {
             
             if (this.editingDrill) {
                 // Update existing drill
-                response = await fetch(`/api/drills/${this.editingDrill.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(drill)
-                });
+                const { data, error } = await supabase
+                    .from('drills')
+                    .update(drillData)
+                    .eq('id', this.editingDrill.id)
+                    .select();
                 
-                if (response.ok) {
-                    // Update drill in local array
-                    const drillIndex = this.drills.findIndex(d => d.id === this.editingDrill.id);
-                    if (drillIndex !== -1) {
-                        this.drills[drillIndex] = { ...this.editingDrill, ...drill };
-                    }
-                    this.editingDrill = null;
+                if (error) throw error;
+                response = data[0];
+                
+                // Update drill in local array
+                const drillIndex = this.drills.findIndex(d => d.id === this.editingDrill.id);
+                if (drillIndex !== -1) {
+                    this.drills[drillIndex] = { ...this.editingDrill, ...drillData, courtElements: drillData.court_elements };
                 }
+                this.editingDrill = null;
             } else {
                 // Create new drill
-                response = await fetch('/api/drills', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(drill)
-                });
+                const { data, error } = await supabase
+                    .from('drills')
+                    .insert([drillData])
+                    .select();
                 
-                if (response.ok) {
-                    const savedDrill = await response.json();
-                    this.drills.push(savedDrill);
-                }
+                if (error) throw error;
+                response = data[0];
+                this.drills.push({ ...response, courtElements: response.court_elements });
             }
             
-            if (response.ok) {
-                this.renderDrills();
-                this.updateRoutineSelect();
-                this.hideDrillModal();
-            } else {
-                alert('Failed to save drill');
-            }
+            this.renderDrills();
+            this.updateRoutineSelect();
+            this.hideDrillModal();
         } catch (error) {
-            console.error('Error saving drill:', error);
-            alert('Failed to save drill');
+            console.error('Error saving drill:', error.message);
+            alert('Failed to save drill: ' + error.message);
         }
     }
 
@@ -932,10 +1010,11 @@ class TennisTrainingApp {
             return;
         }
         
-        const routine = {
+        const routineData = {
             name: document.getElementById('routine-name').value,
             description: document.getElementById('routine-description').value,
-            drillIds: this.selectedDrillOrder // Use the ordered array
+            drill_ids: this.selectedDrillOrder, // Use drill_ids for Supabase
+            user_id: this.user.id // Add user_id
         };
         
         try {
@@ -943,73 +1022,63 @@ class TennisTrainingApp {
             
             if (this.editingRoutine) {
                 // Update existing routine
-                response = await fetch(`/api/routines/${this.editingRoutine.id}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(routine)
-                });
+                const { data, error } = await supabase
+                    .from('routines')
+                    .update(routineData)
+                    .eq('id', this.editingRoutine.id)
+                    .select();
                 
-                if (response.ok) {
-                    // Update routine in local array
-                    const routineIndex = this.routines.findIndex(r => r.id === this.editingRoutine.id);
-                    if (routineIndex !== -1) {
-                        this.routines[routineIndex] = { ...this.editingRoutine, ...routine };
-                    }
-                    this.editingRoutine = null;
+                if (error) throw error;
+                response = data[0];
+                
+                // Update routine in local array
+                const routineIndex = this.routines.findIndex(r => r.id === this.editingRoutine.id);
+                if (routineIndex !== -1) {
+                    this.routines[routineIndex] = { ...this.editingRoutine, ...routineData, drillIds: routineData.drill_ids };
                 }
+                this.editingRoutine = null;
             } else {
                 // Create new routine
-                response = await fetch('/api/routines', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(routine)
-                });
+                const { data, error } = await supabase
+                    .from('routines')
+                    .insert([routineData])
+                    .select();
                 
-                if (response.ok) {
-                    const savedRoutine = await response.json();
-                    this.routines.push(savedRoutine);
-                }
+                if (error) throw error;
+                response = data[0];
+                this.routines.push({ ...response, drillIds: response.drill_ids });
             }
             
-            if (response.ok) {
-                this.renderRoutines();
-                this.updateRoutineSelect();
-                this.hideRoutineModal();
-            } else {
-                alert('Failed to save routine');
-            }
+            this.renderRoutines();
+            this.updateRoutineSelect();
+            this.hideRoutineModal();
         } catch (error) {
-            console.error('Error saving routine:', error);
-            alert('Failed to save routine');
+            console.error('Error saving routine:', error.message);
+            alert('Failed to save routine: ' + error.message);
         }
     }
 
     async deleteDrill(drillId) {
         if (confirm('Are you sure you want to delete this drill?')) {
             try {
-                const response = await fetch(`/api/drills/${drillId}`, {
-                    method: 'DELETE'
-                });
+                const { error } = await supabase
+                    .from('drills')
+                    .delete()
+                    .eq('id', drillId);
                 
-                if (response.ok) {
-                    this.drills = this.drills.filter(drill => drill.id !== drillId);
-                    this.routines = this.routines.map(routine => ({
-                        ...routine,
-                        drillIds: routine.drillIds.filter(id => id !== drillId)
-                    }));
-                    this.renderDrills();
-                    this.renderRoutines();
-                    this.updateRoutineSelect();
-                } else {
-                    alert('Failed to delete drill');
-                }
+                if (error) throw error;
+                
+                this.drills = this.drills.filter(drill => drill.id !== drillId);
+                this.routines = this.routines.map(routine => ({
+                    ...routine,
+                    drillIds: routine.drillIds.filter(id => id !== drillId)
+                }));
+                this.renderDrills();
+                this.renderRoutines();
+                this.updateRoutineSelect();
             } catch (error) {
-                console.error('Error deleting drill:', error);
-                alert('Failed to delete drill');
+                console.error('Error deleting drill:', error.message);
+                alert('Failed to delete drill: ' + error.message);
             }
         }
     }
@@ -1017,20 +1086,19 @@ class TennisTrainingApp {
     async deleteRoutine(routineId) {
         if (confirm('Are you sure you want to delete this routine?')) {
             try {
-                const response = await fetch(`/api/routines/${routineId}`, {
-                    method: 'DELETE'
-                });
+                const { error } = await supabase
+                    .from('routines')
+                    .delete()
+                    .eq('id', routineId);
                 
-                if (response.ok) {
-                    this.routines = this.routines.filter(routine => routine.id !== routineId);
-                    this.renderRoutines();
-                    this.updateRoutineSelect();
-                } else {
-                    alert('Failed to delete routine');
-                }
+                if (error) throw error;
+                
+                this.routines = this.routines.filter(routine => routine.id !== routineId);
+                this.renderRoutines();
+                this.updateRoutineSelect();
             } catch (error) {
-                console.error('Error deleting routine:', error);
-                alert('Failed to delete routine');
+                console.error('Error deleting routine:', error.message);
+                alert('Failed to delete routine: ' + error.message);
             }
         }
     }
@@ -1057,10 +1125,10 @@ class TennisTrainingApp {
                     <span>Elements: ${drill.courtElements?.length || 0}</span>
                 </div>
                 <div class="card-actions">
-                    <button class="btn-small btn-edit" onclick="app.previewDrill(${drill.id})">Preview</button>
-                    <button class="btn-small btn-edit" onclick="app.editDrill(${drill.id})">Edit</button>
-                    <button class="btn-small btn-replicate" onclick="app.replicateDrill(${drill.id})">Replicate</button>
-                    <button class="btn-small btn-delete" onclick="app.deleteDrill(${drill.id})">Delete</button>
+                    <button class="btn-small btn-edit" onclick="app.previewDrill('${drill.id}')">Preview</button>
+                    <button class="btn-small btn-edit" onclick="app.editDrill('${drill.id}')">Edit</button>
+                    <button class="btn-small btn-replicate" onclick="app.replicateDrill('${drill.id}')">Replicate</button>
+                    <button class="btn-small btn-delete" onclick="app.deleteDrill('${drill.id}')">Delete</button>
                 </div>
             </div>
         `).join('');
@@ -1098,9 +1166,9 @@ class TennisTrainingApp {
                         </ul>
                     </div>
                     <div class="card-actions">
-                        <button class="btn-small btn-edit" onclick="app.editRoutine(${routine.id})">Edit</button>
-                        <button class="btn-small btn-replicate" onclick="app.replicateRoutine(${routine.id})">Replicate</button>
-                        <button class="btn-small btn-delete" onclick="app.deleteRoutine(${routine.id})">Delete</button>
+                        <button class="btn-small btn-edit" onclick="app.editRoutine('${routine.id}')">Edit</button>
+                        <button class="btn-small btn-replicate" onclick="app.replicateRoutine('${routine.id}')">Replicate</button>
+                        <button class="btn-small btn-delete" onclick="app.deleteRoutine('${routine.id}')">Delete</button>
                     </div>
                 </div>
             `;
@@ -1114,7 +1182,7 @@ class TennisTrainingApp {
     }
 
     startSession() {
-        const routineId = parseInt(document.getElementById('routine-select').value);
+        const routineId = document.getElementById('routine-select').value;
         if (!routineId) {
             alert('Please select a routine first.');
             return;
@@ -2059,189 +2127,130 @@ class TennisTrainingApp {
         this.resetPreviewAnimation();
     }
 
-    editDrill(drillId) {
+    async editDrill(drillId) {
         const drill = this.drills.find(d => d.id === drillId);
         if (!drill) {
             alert('Drill not found');
             return;
         }
-        
-        // Set editing mode
         this.editingDrill = drill;
-        
-        // Show modal first (this will clear elements)
-        this.showDrillModal();
-        
-        // Then populate form with existing data
         document.getElementById('drill-name').value = drill.name;
-        document.getElementById('drill-description').value = drill.description || '';
+        document.getElementById('drill-description').value = drill.description;
         document.getElementById('drill-duration').value = drill.duration;
-        
-        // Load court elements AFTER showing modal
         this.courtElements = drill.courtElements || [];
         this.initializePlayerPositions();
-        
-        // Update modal title
-        document.querySelector('#drill-modal .modal-header h3').textContent = 'Edit Drill';
-        
-        // Draw court with existing elements
         this.drawCourt('drill-court-canvas');
+        document.querySelector('#drill-modal .modal-header h3').textContent = 'Edit Drill';
+        this.showDrillModal();
     }
 
-    replicateDrill(drillId) {
+    async replicateDrill(drillId) {
         const drill = this.drills.find(d => d.id === drillId);
         if (!drill) {
             alert('Drill not found');
             return;
         }
-        
-        // DON'T set editingDrill - treat this as a new drill creation
-        this.editingDrill = null;
-        
-        // Show modal first (this will clear elements)
-        this.showDrillModal();
-        
-        // Then populate form with replicated data
-        document.getElementById('drill-name').value = `${drill.name} (Copy)`;
-        document.getElementById('drill-description').value = drill.description || '';
-        document.getElementById('drill-duration').value = drill.duration;
-        
-        // Deep copy court elements with new IDs AFTER showing modal
-        if (drill.courtElements && drill.courtElements.length > 0) {
-            // Create a mapping of old player IDs to new player IDs
-            const playerIdMapping = new Map();
-            
-            // First pass: create new IDs for all elements and build player ID mapping
-            this.courtElements = drill.courtElements.map(element => {
-                const newId = Date.now() + Math.random() * 1000 + Math.floor(Math.random() * 1000);
-                
-                // If it's a player, store the ID mapping
-                if (element.type === 'player') {
-                    playerIdMapping.set(element.id, newId);
-                }
-                
-                return {
-                    ...element,
-                    id: newId
-                };
-            });
-            
-            // Second pass: update playerId references in shots and movements
-            this.courtElements = this.courtElements.map(element => {
-                if ((element.type === 'shot' || element.type === 'movement') && element.playerId) {
-                    const newPlayerId = playerIdMapping.get(element.playerId);
-                    if (newPlayerId) {
-                        return {
-                            ...element,
-                            playerId: newPlayerId
-                        };
-                    }
-                }
-                return element;
-            });
-            
-            this.initializePlayerPositions();
-        }
-        
-        // Update modal title to indicate it's a replication
-        document.querySelector('#drill-modal .modal-header h3').textContent = 'Create Drill (Replicated)';
-        
-        // Draw court with replicated elements
-        this.drawCourt('drill-court-canvas');
-    }
-
-    editRoutine(routineId) {
-        const routine = this.routines.find(r => r.id === routineId);
-        if (!routine) {
-            alert('Routine not found');
-            return;
-        }
-        
-        // Set editing mode
-        this.editingRoutine = routine;
-        
-        // Populate form with existing data
-        document.getElementById('routine-name').value = routine.name;
-        document.getElementById('routine-description').value = routine.description || '';
-        
-        // Update modal title
-        document.querySelector('#routine-modal .modal-header h3').textContent = 'Edit Routine';
-        
-        // Show modal and render drill selection
-        this.showRoutineModal();
-        
-        // Restore the drill order
-        this.selectedDrillOrder = [...(routine.drillIds || [])];
-        
-        // Pre-select the drills that are in this routine and render order
-        setTimeout(() => {
-            const drillIds = routine.drillIds || [];
-            drillIds.forEach(drillId => {
-                const checkbox = document.querySelector(`input[value="${drillId}"]`);
-                if (checkbox) {
-                    checkbox.checked = true;
-                }
-            });
-            this.renderDrillOrder();
-        }, 100);
-    }
-
-    replicateRoutine(routineId) {
-        const routine = this.routines.find(r => r.id === routineId);
-        if (!routine) {
-            alert('Routine not found');
-            return;
-        }
-        
-        // Create a copy of the routine with new ID and modified name
-        const replicatedRoutine = {
-            ...routine,
-            id: Date.now(), // Generate new ID
-            name: `${routine.name} (Copy)`,
-            drillIds: [...routine.drillIds] // Copy drill IDs array
+        // Create a new drill with replicated data
+        const newDrillData = {
+            name: `Copy of ${drill.name}`,
+            description: drill.description,
+            duration: drill.duration,
+            court_elements: drill.courtElements, // Use court_elements for Supabase
+            user_id: this.user.id // Assign to current user
         };
-        
-        // Set editing mode with the replicated routine
-        this.editingRoutine = replicatedRoutine;
-        
-        // Populate form with replicated data
-        document.getElementById('routine-name').value = replicatedRoutine.name;
-        document.getElementById('routine-description').value = replicatedRoutine.description || '';
-        
-        // Update modal title to indicate it's a replication
-        document.querySelector('#routine-modal .modal-header h3').textContent = 'Replicate Routine';
-        
-        // Show modal and render drill selection
+
+        try {
+            const { data, error } = await supabase
+                .from('drills')
+                .insert([newDrillData])
+                .select();
+            
+            if (error) throw error;
+            this.drills.push({ ...data[0], courtElements: data[0].court_elements });
+            this.renderDrills();
+            this.updateRoutineSelect();
+            alert('Drill replicated successfully!');
+        } catch (error) {
+            console.error('Error replicating drill:', error.message);
+            alert('Failed to replicate drill: ' + error.message);
+        }
+    }
+
+    async editRoutine(routineId) {
+        const routine = this.routines.find(r => r.id === routineId);
+        if (!routine) {
+            alert('Routine not found');
+            return;
+        }
+        this.editingRoutine = routine;
+        document.getElementById('routine-name').value = routine.name;
+        document.getElementById('routine-description').value = routine.description;
+        this.selectedDrillOrder = [...routine.drillIds]; // Load existing drill order
+        document.querySelector('#routine-modal .modal-header h3').textContent = 'Edit Routine';
         this.showRoutineModal();
-        
-        // Pre-select the drills that are in the replicated routine
-        setTimeout(() => {
-            const drillIds = replicatedRoutine.drillIds || [];
-            drillIds.forEach(drillId => {
-                const checkbox = document.querySelector(`input[value="${drillId}"]`);
-                if (checkbox) {
-                    checkbox.checked = true;
-                }
-            });
-        }, 100);
+        // Pre-check the drills in the selection list
+        this.selectedDrillOrder.forEach(drillId => {
+            const checkbox = document.getElementById(`drill-${drillId}`);
+            if (checkbox) checkbox.checked = true;
+        });
+        this.renderDrillOrder(); // Re-render to show correct order
+    }
+
+    async replicateRoutine(routineId) {
+        const routine = this.routines.find(r => r.id === routineId);
+        if (!routine) {
+            alert('Routine not found');
+            return;
+        }
+        // Create a new routine with replicated data
+        const newRoutineData = {
+            name: `Copy of ${routine.name}`,
+            description: routine.description,
+            drill_ids: routine.drillIds, // Use drill_ids for Supabase
+            user_id: this.user.id // Assign to current user
+        };
+
+        try {
+            const { data, error } = await supabase
+                .from('routines')
+                .insert([newRoutineData])
+                .select();
+            
+            if (error) throw error;
+            this.routines.push({ ...data[0], drillIds: data[0].drill_ids });
+            this.renderRoutines();
+            this.updateRoutineSelect();
+            alert('Routine replicated successfully!');
+        } catch (error) {
+            console.error('Error replicating routine:', error.message);
+            alert('Failed to replicate routine: ' + error.message);
+        }
     }
 
     async loadData() {
+        if (!this.user) return;
         try {
-            const [drillsResponse, routinesResponse] = await Promise.all([
-                fetch('/api/drills'),
-                fetch('/api/routines')
-            ]);
-            
-            if (drillsResponse.ok) {
-                this.drills = await drillsResponse.json();
-            }
-            
-            if (routinesResponse.ok) {
-                this.routines = await routinesResponse.json();
-            }
+            const { data: drills, error: drillsError } = await supabase
+                .from('drills')
+                .select('*')
+                .eq('user_id', this.user.id);
+            if (drillsError) throw drillsError;
+            this.drills = drills.map(drill => ({
+                ...drill,
+                courtElements: drill.court_elements
+            }));
+
+            const { data: routines, error: routinesError } = await supabase
+                .from('routines')
+                .select('*')
+                .eq('user_id', this.user.id);
+            if (routinesError) throw routinesError;
+            this.routines = routines.map(routine => ({
+                ...routine,
+                drillIds: routine.drill_ids
+            }));
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('Error loading data:', error.message);
         }
     }
     
